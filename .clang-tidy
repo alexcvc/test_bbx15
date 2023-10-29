@@ -1,0 +1,116 @@
+# Based on https://github.com/googleapis/google-cloud-cpp/blob/main/.clang-tidy
+# Here is an explanation for why some of the checks are disabled:
+#
+#  -modernize-use-trailing-return-type: clang-tidy recommends using
+#      `auto Foo() -> std::string { return ...; }`, we think the code is less
+#      readable in this form.
+#
+#  -modernize-return-braced-init-list: We think removing typenames and using
+#      only braced-init can hurt readability.
+#
+#  -performance-move-const-arg: This warning requires the developer to
+#      know/care more about the implementation details of types/functions than
+#      should be necessary. For example, `A a; F(std::move(a));` will trigger a
+#      warning IFF `A` is a trivial type (and therefore the move is
+#      meaningless). It would also warn if `F` accepts by `const&`, which is
+#      another detail that the caller need not care about.
+#
+#  -readability-redundant-declaration: A friend declaration inside a class
+#      counts as a declaration, so if we also declare that friend outside the
+#      class in order to document it as part of the public API, that will
+#      trigger a redundant declaration warning from this check.
+#
+#  -misc-no-recursion: Allow recursions
+#
+#  -clang-analyzer-cplusplus.NewDelete: Disabled due to false-positive in boost::asio
+#      Aside from that it duplicates functionality provided by the address-sanitizer
+#      https://github.com/boostorg/asio/issues/341#issuecomment-626164787
+#      https://github.com/boostorg/beast/issues/1674
+#      https://stackoverflow.com/questions/62087533/clang-analyzer-potential-memory-leak-false-positive
+#
+
+Checks: >
+  *,
+  -abseil-*,
+  -altera-*,
+  -darwin-*,
+  -llvmlibc-*,
+  -mpi-*,
+  -objc*,
+  -openmp-*,
+  -zircon-*,
+  -bugprone-easily-swappable-parameters,
+  -clang-analyzer-cplusplus.NewDelete,
+  -fuchsia-default-arguments-calls,
+  -fuchsia-default-arguments-declarations,
+  -fuchsia-overloaded-operator,
+  -google-runtime-references,
+  -misc-no-recursion,
+  -misc-non-private-member-variables-in-classes,
+  -modernize-return-braced-init-list,
+  -modernize-use-trailing-return-type,
+  -performance-move-const-arg,
+  -readability-redundant-declaration
+
+# Turn all the warnings from the checks above into errors.
+# WarningsAsErrors: "*"
+
+HeaderFilterRegex: '^((?!.conan).)*$'
+AnalyzeTemporaryDtors: false
+
+# Google Style patterns. Based on https://gist.github.com/airglow923/1fa3bda42f2b193920d7f46ee8345e04
+CheckOptions:
+  - key:             readability-identifier-naming.ClassCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.ClassMemberCase     # original: lower_case
+    value:           camelBack
+  - key:             readability-identifier-naming.ConstexprVariableCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.ConstexprVariablePrefix
+    value:           k
+  - key:             readability-identifier-naming.EnumCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.EnumConstantCase
+    value:           CamelCase
+  # - key:             readability-identifier-naming.EnumConstantPrefix
+  #   value:           k
+  - key:             readability-identifier-naming.FunctionCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.GlobalConstantCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.GlobalConstantPrefix
+    value:           k
+  - key:             readability-identifier-naming.StaticConstantCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.StaticConstantPrefix
+    value:           k
+  - key:             readability-identifier-naming.StaticVariableCase   # original: lower_case
+    value:           camelBack
+  - key:             readability-identifier-naming.MacroDefinitionCase
+    value:           UPPER_CASE
+  - key:             readability-identifier-naming.MacroDefinitionIgnoredRegexp
+    value:           '^[A-Z]+(_[A-Z]+)*_$'
+  - key:             readability-identifier-naming.MemberCase           # original: lower_case
+    value:           camelBack
+  - key:             readability-identifier-naming.MemberPrefix         # Added
+    value:           'm_'
+  #- key:             readability-identifier-naming.PrivateMemberSuffix # Disabled
+  #  value:           _
+  - key:             readability-identifier-naming.PublicMemberSuffix
+    value:           ''
+  - key:             readability-identifier-naming.NamespaceCase         # original: lower_case
+    value:           camelBack
+  - key:             readability-identifier-naming.ParameterCase         # original: lower_case
+    value:           camelBack
+  - key:             readability-identifier-naming.TypeAliasCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.TypedefCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.VariableCase          # original: lower_case
+    value:           camelBack
+  - key:             readability-identifier-naming.IgnoreMainLikeFunctions
+    value:           1
+  - key:             readability-identifier-length.IgnoredVariableNames
+    value:           '[_|j|cb|dm|it|lk]'
+  - key:             readability-identifier-length.IgnoredParameterNames
+    value:           '[j|cb|dt|ts|u|q]'
