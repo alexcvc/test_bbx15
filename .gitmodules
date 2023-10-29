@@ -1,0 +1,3 @@
+[submodule "submodules/fswatch"]
+	path = submodules/fswatch
+	url = https://github.com/p-ranav/fswatch.git
