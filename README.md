@@ -6,6 +6,10 @@
 * Cross Tool:
 
 ```shell
+source: https://developer.arm.com/downloads/-/gnu-a/10-2-2020-11
+
+https://developer.arm.com/-/media/Files/downloads/gnu-a/10.2-2020.11/binrel/gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz?revision=d0b90559-3960-4e4b-9297-7ddbc3e52783&rev=d0b9055939604e4b92977ddbc3e52783&hash=C3D4D1D828D6F933760715F509D3762118AA1D84
+
 gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf/
 gcc-arm-10.2-gnueabihf -> gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf/
 gnu_bbx15 -> gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf/
