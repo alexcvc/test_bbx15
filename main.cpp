@@ -16,14 +16,12 @@
 //-----------------------------------------------------------------------------
 // includes
 //-----------------------------------------------------------------------------
-#include <getopt.h>
-#include <syslog.h>
-
-#include "submodules/fswatch/include/fswatch.hpp"
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
 #include <fstream>
+#include <fswatch.hpp>
+#include <getopt.h>
 #include <iostream>
 #include <mutex>
 #include <string>
@@ -31,18 +29,10 @@
 
 using namespace std::chrono_literals;
 
-//-----------------------------------------------------------------------------
-// local Defines and Macros
-//-----------------------------------------------------------------------------
-
-//-----------------------------------------------------------------------------
-// local Typedefs, Enums, Unions
-//-----------------------------------------------------------------------------
-
 /**
  * @brief event plan structure
  */
-struct Event {
+struct TaskEvent {
 public:
     std::mutex event_mutex;
     std::condition_variable event_condition;
@@ -54,8 +44,8 @@ public:
 /**
  * @brief Events for three asynchronous tasks
  */
-Event task_event_stop_fswatcher;
-Event task_event_stop_test;
+TaskEvent taskEventStopFswatcher;
+TaskEvent taskEventStopTest;
 
 //-----------------------------------------------------------------------------
 // local/global Function Prototypes
@@ -88,16 +78,9 @@ static void DisplayHelp(const char *prog) {
 }
 
 /************************************************************************/ /**
-* @fn      void ProcessOptions(int argc, char* argv[])
 * @brief   parse command line parameters
-* @details reads parameters from command line
-*
 * @param argc - number parameters in command line
 * @param argv - command line parameters as array
-*
-* @return void
-*
-* @exception void
 ****************************************************************************/
 
 static void ProcessOptions(int argc, char *argv[]) {
@@ -161,23 +144,19 @@ static bool HandleGetChar() {
     return false;
 }
 
-//-----------------------------------------------------------------------------
-// global Function Definitions
-//-----------------------------------------------------------------------------
-
 /**
  * @brief Waking up all running tasks
  * @param config - configuration the manager
  * @param all_tasks_wakeup - wakeup all tasks but not only file system event driving tasks
  */
-void WakeUpRunningTasks(bool all_tasks_wakeup = true) {
+void WakeUpTasks(bool all_tasks_wakeup = true) {
     if (all_tasks_wakeup) {
-        std::unique_lock lck(task_event_stop_fswatcher.event_mutex);
-        task_event_stop_fswatcher.event_condition.notify_all();// Wakes up stop a file system watcher
+        std::unique_lock lck(taskEventStopFswatcher.event_mutex);
+        taskEventStopFswatcher.event_condition.notify_all();// Wakes up stop a file system watcher
     }
     {
-        std::unique_lock lck(task_event_stop_test.event_mutex);
-        task_event_stop_test.event_condition.notify_all();// Wakes up a displacement task
+        std::unique_lock lck(taskEventStopTest.event_mutex);
+        taskEventStopTest.event_condition.notify_all();// Wakes up a displacement task
     }
 }
 
@@ -194,15 +173,15 @@ void TaskWorkerFsWatcher(std::stop_token token) {
     auto watcher = fswatch("/tmp");
 
     // add watching events
-    watcher.on({fswatch::Event::FILE_CLOSED, fswatch::Event::FILE_DELETED},
+    watcher.on({fswatch::Event::FILE_CLOSED, fswatch::Event::FILE_MODIFIED, fswatch::Event::FILE_DELETED},
                [&]([[maybe_unused]] auto &event) {
-                   WakeUpRunningTasks(true);// Wake up sleeping tasks by an event in the file system
+                   WakeUpTasks(false);// Wake up sleeping tasks by an event in the file system
                });
 
     // Register a stop callback for stop task
     std::stop_callback stop_cb(token, [&]() {
         // Wake up thread on stop request
-        task_event_stop_fswatcher.event_condition.notify_all();
+        taskEventStopFswatcher.event_condition.notify_all();
     });
 
     // start thread with stop fs-watcher task
@@ -210,8 +189,8 @@ void TaskWorkerFsWatcher(std::stop_token token) {
         // create observer
         while (true) {
             // Start of locked block
-            std::unique_lock lck(task_event_stop_fswatcher.event_mutex);
-            task_event_stop_fswatcher.event_condition.wait(lck, [&, token]() {
+            std::unique_lock lck(taskEventStopFswatcher.event_mutex);
+            taskEventStopFswatcher.event_condition.wait(lck, [&, token]() {
                 return token.stop_requested();
             });
 
@@ -224,10 +203,10 @@ void TaskWorkerFsWatcher(std::stop_token token) {
         watcher.stop();
         // wakeup watcher via event in file system
         std::ofstream tmpfile;
-        tmpfile.open("/tmp/~watcher_wakeup", std::ios_base::trunc);
+        tmpfile.open("/tmp/~wakeup", std::ios_base::trunc);
         tmpfile << "Wakeup\n";
         tmpfile.close();
-        std::printf("Stop filesystem watcher task stopped.");
+        std::printf("Stop filesystem watcher task stopped\n");
     });
 
     try {
@@ -242,7 +221,7 @@ void TaskWorkerFsWatcher(std::stop_token token) {
 
     stop_watching_task.join();
 
-    std::printf("Filesystem watcher task stopped.\n");
+    std::printf("Filesystem watcher task stopped\n");
 }
 
 /**
@@ -258,7 +237,7 @@ void TaskWorker_Test(std::stop_token token) {
     // Register a stop callback
     std::stop_callback stop_cb(token, [&]() {
         // Wake thread on stop request
-        task_event_stop_test.event_condition.notify_all();
+        taskEventStopTest.event_condition.notify_all();
     });
 
     // create displacement context
@@ -267,8 +246,8 @@ void TaskWorker_Test(std::stop_token token) {
     while (true) {
         // observe serves states
         // Start of locked block
-        std::unique_lock lck(task_event_stop_test.event_mutex);
-        task_event_stop_test.event_condition.wait_for(lck, std::chrono::milliseconds(sooner));
+        std::unique_lock lck(taskEventStopTest.event_mutex);
+        taskEventStopTest.event_condition.wait_for(lck, std::chrono::milliseconds(sooner));
 
         //Stop if requested to stop
         if (token.stop_requested()) {
@@ -289,9 +268,9 @@ void TaskWorker_Test(std::stop_token token) {
 ****************************************************************************/
 
 int main(int argc, char **argv) {
-    std::stop_source stop_src;// Create a stop source
-    std::thread task_worker_fswatcher;
-    std::thread tas_worker_test;
+    std::stop_source stopSource;// Create a stop source
+    std::thread workerFswatcher;
+    std::thread workerTest;
 
     //----------------------------------------------------------
     // parse parameters
@@ -305,27 +284,27 @@ int main(int argc, char **argv) {
     // go to idle in main
     //----------------------------------------------------------
     // Create all workers and pass stop tokens
-    tas_worker_test = std::move(std::thread(TaskWorker_Test, stop_src.get_token()));
+    workerTest = std::move(std::thread(TaskWorker_Test, stopSource.get_token()));
     // start task filesystem watcher
-    task_worker_fswatcher = std::move(std::thread(TaskWorkerFsWatcher, stop_src.get_token()));
+    workerFswatcher = std::move(std::thread(TaskWorkerFsWatcher, stopSource.get_token()));
 
     // main loop or sleep
     while (true) {
-            if (HandleGetChar()) {
-                break;
-            }
+        if (HandleGetChar()) {
+            break;
+        }
     }
 
-    std::printf("Request stop all  tasks\n");
+    std::printf("Request stop all tasks\n");
     // set token to stop all worker
-    stop_src.request_stop();
+    stopSource.request_stop();
 
     // wakeup all tasks
-    WakeUpRunningTasks(true);
+    WakeUpTasks(true);
 
     // Join threads
-    task_worker_fswatcher.join();
-    tas_worker_test.join();
+    workerTest.join();
+    workerFswatcher.join();
 
     return EXIT_SUCCESS;
 }
