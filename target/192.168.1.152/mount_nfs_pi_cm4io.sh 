@@ -1,0 +1,85 @@
+#!/bin/bash
+
+IPADDR=${PWD##*/} # to assign to a variable
+USER=debian
+PASSWORD=temppwd
+DIRLIST='srv home app'
+
+echo 
+echo "#########################################"
+echo "#                                       #"
+echo "#   Mount-UnMount remote  via NFS       #"
+echo "#                                       #"
+echo "#########################################"
+
+if [[ $EUID -ne 0 ]]; then
+   echo
+   echo "This script must be run as root, use sudo "$0" instead" 1>&2
+   echo
+   read -p "Press Enter to continue or Ctrl-C to exit.." xy
+   #exit 1
+fi
+
+echo -p "Press Enter to exit.."
+
+#
+# mount remote
+#
+
+start(){
+    for dir in $DIRLIST ; do \
+        echo "Mount NFS-dir: ${IPADDR}/$dir"
+        test -d $dir || { mkdir $dir ; }
+        sudo mount.nfs -w -n ${IPADDR}://$dir ./$dir
+    done
+}
+
+
+#
+# umount remote
+#
+
+stop(){
+    for dir in $DIRLIST ; do
+        sudo umount $dir
+        test -d $dir && { rm -r $dir ; }
+    done
+}
+
+#
+# menu
+#
+
+echo
+echo "Select what you will make:"
+echo
+echo " 1|M|m - Mount remote resources"
+echo " 0|U|u - Release all remote resources"
+echo
+read -p "Select please a Tools number " mod;
+echo 
+
+case $mod in
+    1|m|M)
+        echo -n "Mount"
+        start
+    ;;
+
+    0|u|M)
+        echo -n "Unmount & Delete"
+        stop
+        echo "DONE"
+    ;;
+
+    *)
+    echo "Usage: {m|u}"
+    exit 1
+    ;;
+esac
+
+ls -al
+
+read -p "Press Enter to exit." mod;
+
+exit 0
+
